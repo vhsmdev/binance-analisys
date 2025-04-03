@@ -97,7 +97,7 @@ with tab1:
         cards = []
         for nome, grupo in estrategia_grouped:
             positivas = grupo[grupo["pnl_num"] > 0].shape[0]
-            negativas = grupo[grupo["pnl_num"] <= 0].shape[0]
+            negativas = grupo[grupo["pnl_num"] < 0].shape[0]
             lucro_total = grupo["pnl_num"].sum()
             cards.append((nome, positivas, negativas, lucro_total))
 
