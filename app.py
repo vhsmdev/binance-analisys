@@ -1,21 +1,30 @@
+# app.py
 import streamlit as st
-
-st.set_page_config(page_title="Binance PnL Online", layout="wide")
-
 from streamlit_autorefresh import st_autorefresh
 import pandas as pd
 from dotenv import load_dotenv
-from datetime import date
+from datetime import datetime, date
 from binance_client import get_trades, get_price, get_balance
 from storytelling_calculator import processar_trades_completos
 
+st.set_page_config(page_title="Binance PnL Online", layout="wide")
+
+# 🔄 Atualiza automaticamente a cada 6 minutos
 st_autorefresh(interval=6 * 60 * 1000, key="data_refresh")
+
+# ⏰ Verifica mudança de dia para atualizar painel
+if "last_loaded_day" not in st.session_state:
+    st.session_state["last_loaded_day"] = datetime.today().date()
+
+if st.session_state["last_loaded_day"] != datetime.today().date():
+    st.session_state.clear()
+    st.experimental_rerun()
 
 st.title("📡 PnL com dados ao vivo da Binance")
 st.caption("Este painel mostra o desempenho detalhado das suas estratégias de trade na Binance, com histórico completo de operações.")
 
 ativos = {
-    "XRPUSDT": "XRP Conservadora",
+    "XRPUSDT": "XRP Agressiva",
     "CAKEUSDT": "CAKE Scalping"
 }
 
@@ -102,6 +111,16 @@ with tab1:
             for token, qtd in saldos_tokens:
                 st.write(f"🔸 {token}: {qtd:.4f}")
 
+        # 🗓️ Dias positivos e negativos - MOVIDO PARA CIMA
+        st.subheader("📅 Dias Positivos e Negativos")
+        df_dias = df_realizadas.groupby("Data").agg(
+            Total=('pnl_num', 'sum'),
+        ).reset_index()
+        df_dias["Status"] = df_dias["Total"].apply(lambda x: "🟢 Positivo" if x > 0 else "🔴 Negativo")
+        st.dataframe(df_dias, use_container_width=True)
+
+        st.divider()
+
         if all_posicoes:
             df_pos = pd.concat(all_posicoes, ignore_index=True)
             st.subheader("📌 Posição Atual por Estratégia")
@@ -140,14 +159,6 @@ with tab1:
             st.markdown("**📆 Evolução Diária do Lucro**")
             df_diario = df_realizadas.groupby("Data")["pnl_num"].sum().cumsum().to_frame(name="Lucro Acumulado")
             st.line_chart(df_diario)
-
-        # 🗓️ Mapa de dias positivos/negativos
-        st.subheader("📅 Dias Positivos e Negativos")
-        df_dias = df_realizadas.groupby("Data").agg(
-            Total=('pnl_num', 'sum'),
-        ).reset_index()
-        df_dias["Status"] = df_dias["Total"].apply(lambda x: "🟢 Positivo" if x > 0 else "🔴 Negativo")
-        st.dataframe(df_dias, use_container_width=True)
 
 with tab2:
     if operacoes_realizadas:
