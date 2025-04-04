@@ -1,22 +1,19 @@
-# app.py
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 import pandas as pd
 from dotenv import load_dotenv
-from datetime import datetime, date
-from binance_client import get_trades, get_price, get_balance
+from datetime import datetime, date, timezone
+from binance_client import get_trades, get_price, get_balance, get_open_orders
 from storytelling_calculator import processar_trades_completos
 
 st.set_page_config(page_title="Binance PnL Online", layout="wide")
-
-# 🔄 Atualiza automaticamente a cada 6 minutos
 st_autorefresh(interval=6 * 60 * 1000, key="data_refresh")
 
-# ⏰ Verifica mudança de dia para atualizar painel
+# ⏰ Controle de dia com base no horário da Binance (UTC)
 if "last_loaded_day" not in st.session_state:
-    st.session_state["last_loaded_day"] = datetime.today().date()
+    st.session_state["last_loaded_day"] = datetime.now(timezone.utc).date()
 
-if st.session_state["last_loaded_day"] != datetime.today().date():
+if st.session_state["last_loaded_day"] != datetime.now(timezone.utc).date():
     st.session_state.clear()
     st.experimental_rerun()
 
@@ -35,6 +32,7 @@ resumos = []
 saldos_usdt = []
 saldos_tokens = []
 operacoes_realizadas = []
+ordens_abertas = []
 
 with st.spinner("🔄 Coletando dados da Binance..."):
     for symbol, estrategia in ativos.items():
@@ -71,6 +69,18 @@ with st.spinner("🔄 Coletando dados da Binance..."):
             saldos_tokens.append((token, saldo_livre))
             saldos_usdt.append(saldo_livre * preco_atual)
 
+            # Ordens abertas (pendentes)
+            ordens = get_open_orders(symbol)
+            for ordem in ordens:
+                ordens_abertas.append({
+                    "Ativo": ordem["symbol"],
+                    "Tipo": ordem["side"],
+                    "Qtd": float(ordem["origQty"]),
+                    "Preço": float(ordem["price"]),
+                    "Status": ordem["status"],
+                    "Criada em": ordem["time"]
+                })
+
         except Exception as e:
             st.error(f"Erro ao processar {symbol}: {e}")
 
@@ -81,103 +91,120 @@ try:
 except:
     usdt_saldo = 0.0
 
+meta_dia = 1.00  # 🎯 Meta de lucro diário em USDT
+
 # Tabs
-tab1, tab2 = st.tabs(["📊 Painel Geral", "📆 Resultado de Hoje"])
+tab1, tab2 = st.tabs(["📊 Análise Geral", "📆 Análise do Dia"])
+if all_trades:
+    df_full = pd.concat(all_trades, ignore_index=True)
+    df_realizadas = pd.concat(operacoes_realizadas, ignore_index=True)
 
-with tab1:
-    if all_trades:
-        df_full = pd.concat(all_trades, ignore_index=True)
-        df_realizadas = pd.concat(operacoes_realizadas, ignore_index=True)
+    # 📆 ANÁLISE DO DIA
+    with tab2:
+        st.subheader("📆 Resultado de Hoje (Horário da Binance - UTC)")
 
-        total_realizado = df_realizadas["pnl_num"].sum()
-        lucro_medio = df_realizadas["pnl_num"].mean()
+        hoje_utc = datetime.now(timezone.utc).date()
+        df_hoje = df_realizadas[df_realizadas["Data"] == hoje_utc]
+        lucro_hoje = df_hoje["pnl_num"].sum()
+        lucro_medio_hoje = df_hoje["pnl_num"].mean() if not df_hoje.empty else 0.0
+        progresso = min(lucro_hoje / meta_dia, 1.0)
+
+        st.markdown(f"🎯 **Meta diária:** ${meta_dia:.2f}")
+
+        col1, col2 = st.columns(2)
+        col1.metric("💰 Lucro do Dia", f"${lucro_hoje:.2f}")
+        col2.progress(progresso, text=f"{progresso * 100:.1f}% da meta diária")
+
+        col3, col4, col5 = st.columns(3)
+        col3.metric("📈 Lucro Médio por Operação", f"${lucro_medio_hoje:.2f}")
+        col4.metric("💰 Valor Atual em Ativos", f"${sum(saldos_usdt):.2f}")
+        col5.metric("💵 Saldo Atual em USDT", f"${usdt_saldo:.2f}")
+
+        if ordens_abertas:
+            st.subheader("📌 Ordens Abertas (Pendentes na Binance)")
+            df_abertas = pd.DataFrame(ordens_abertas)
+            df_abertas["Criada em"] = pd.to_datetime(df_abertas["Criada em"], unit="ms")
+            df_abertas = df_abertas[["Ativo", "Tipo", "Qtd", "Preço", "Status", "Criada em"]]
+            st.dataframe(df_abertas, use_container_width=True)
+        else:
+            st.info("✅ Não há ordens pendentes no momento.")
+
+        st.divider()
+        st.subheader("📘 Histórico de Trades do Dia")
+        st.dataframe(df_hoje, use_container_width=True)
+
+
+
+    # 📊 ANÁLISE GERAL
+    with tab1:
+        st.subheader("📅 Filtro de Período")
+        col1, col2 = st.columns(2)
+        data_inicial = col1.date_input("Data Inicial", value=date.today().replace(day=1))
+        data_final = col2.date_input("Data Final", value=date.today())
+
+        df_periodo = df_realizadas[
+            (df_realizadas["Data"] >= data_inicial) &
+            (df_realizadas["Data"] <= data_final)
+        ]
+
+        total_realizado = df_periodo["pnl_num"].sum()
+        lucro_medio = df_periodo["pnl_num"].mean()
         total_em_ativos = sum(saldos_usdt)
-
-        estrategia_grouped = df_realizadas.groupby("Estratégia")
-        cards = []
-        for nome, grupo in estrategia_grouped:
-            positivas = grupo[grupo["pnl_num"] > 0].shape[0]
-            negativas = grupo[grupo["pnl_num"] < 0].shape[0]
-            lucro_total = grupo["pnl_num"].sum()
-            cards.append((nome, positivas, negativas, lucro_total))
 
         st.subheader("💼 Visão Geral da Carteira")
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric("💵 Lucro Realizado Total", f"${total_realizado:.2f}")
+        col1.metric("💵 Lucro Realizado (Período)", f"${total_realizado:.2f}")
         col2.metric("📈 Lucro Médio por Operação", f"${lucro_medio:.2f}")
         col3.metric("💰 Valor Atual em Ativos", f"${total_em_ativos:.2f}")
         col4.metric("💵 Saldo Atual em USDT", f"${usdt_saldo:.2f}")
 
-        with st.expander("📦 Saldos por Ativo"):
-            for token, qtd in saldos_tokens:
-                st.write(f"🔸 {token}: {qtd:.4f}")
+        st.subheader("📈 Representatividade por Ativo no Período")
+        df_repr = df_periodo.groupby("symbol")["pnl_num"].sum().to_frame("Lucro")
+        if not df_repr.empty:
+            df_repr["% do Total"] = (df_repr["Lucro"] / total_realizado * 100).round(1)
+            st.dataframe(df_repr, use_container_width=True)
+            st.bar_chart(df_repr["Lucro"])
+        else:
+            st.info("Nenhuma operação no período selecionado.")
 
-        # 🗓️ Dias positivos e negativos - MOVIDO PARA CIMA
-        st.subheader("📅 Dias Positivos e Negativos")
-        df_dias = df_realizadas.groupby("Data").agg(
-            Total=('pnl_num', 'sum'),
-        ).reset_index()
-        df_dias["Status"] = df_dias["Total"].apply(lambda x: "🟢 Positivo" if x > 0 else "🔴 Negativo")
-        st.dataframe(df_dias, use_container_width=True)
-
-        st.divider()
+        st.subheader("📦 Ativos em Carteira (Valorização Atual)")
+        df_saldos = pd.DataFrame([
+            {
+                "Ativo": token,
+                "Qtd": qtd,
+                "Preço Atual (USDT)": get_price(f"{token}USDT"),
+                "Valor Total (USDT)": qtd * get_price(f"{token}USDT")
+            }
+            for token, qtd in saldos_tokens
+        ])
+        st.dataframe(df_saldos, use_container_width=True)
 
         if all_posicoes:
+            st.subheader("📌 Posições Abertas (PnL Flutuante)")
             df_pos = pd.concat(all_posicoes, ignore_index=True)
-            st.subheader("📌 Posição Atual por Estratégia")
-            for _, row in df_pos.iterrows():
-                col1, col2, col3 = st.columns(3)
-                col1.metric(f"📍 {row['Estratégia']}", f"{row['Qtd']:.4f} {row['symbol'][:-4]}")
-                col2.metric("💰 Valor", row["Total"])
-                col3.metric("📊 PnL", row["PnL USDT"], delta=row["PnL %"])
-            st.divider()
+            df_pos["Token"] = df_pos["symbol"].str.replace("USDT", "")
+            df_pos_mostrar = df_pos[["Estratégia", "Token", "Qtd", "Total", "PnL USDT", "PnL %"]]
+            st.dataframe(df_pos_mostrar, use_container_width=True)
 
-        st.subheader("📊 Desempenho por Estratégia")
-        for nome, pos, neg, total in cards:
+        st.subheader("📊 Desempenho Realizado por Estratégia")
+        estrategia_grouped = df_periodo.groupby("Estratégia")
+        for nome, grupo in estrategia_grouped:
+            positivas = grupo[grupo["pnl_num"] > 0].shape[0]
+            negativas = grupo[grupo["pnl_num"] < 0].shape[0]
+            lucro_total = grupo["pnl_num"].sum()
             st.markdown(f"**📌 {nome}**")
             c1, c2, c3 = st.columns(3)
-            c1.metric("📈 Operações Positivas", pos)
-            c2.metric("📉 Operações Negativas", neg)
-            c3.metric("💰 Lucro Total", f"${total:.2f}")
-        st.divider()
+            c1.metric("📈 Operações Positivas", positivas)
+            c2.metric("📉 Operações Negativas", negativas)
+            c3.metric("💰 Lucro Total", f"${lucro_total:.2f}")
 
-        st.subheader("📘 Histórico de Trades")
+        st.subheader("📘 Histórico de Trades Realizados")
         df_full = df_full.sort_values("Data/Hora", ascending=False)
         st.dataframe(
             df_full[["Estratégia", "symbol", "Tipo", "Qtd", "Preço", "Total", "PnL USDT", "PnL %", "📍", "Contexto", "Data/Hora"]],
             use_container_width=True
         )
 
-        st.subheader("📈 Análises Visuais")
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.markdown("**📉 Lucro por Ativo**")
-            lucro_ativos = df_realizadas.groupby("symbol")["pnl_num"].sum().to_frame(name="Lucro").T
-            st.bar_chart(lucro_ativos)
-
-        with col2:
-            st.markdown("**📆 Evolução Diária do Lucro**")
-            df_diario = df_realizadas.groupby("Data")["pnl_num"].sum().cumsum().to_frame(name="Lucro Acumulado")
-            st.line_chart(df_diario)
-
-with tab2:
-    if operacoes_realizadas:
-        hoje = date.today()
-        df_hoje = pd.concat(operacoes_realizadas)
-        df_hoje = df_hoje[df_hoje["Data"] == hoje]
-
-        st.subheader(f"📆 Resultado de Hoje ({hoje.strftime('%d/%m/%Y')})")
-        if not df_hoje.empty:
-            total_hoje = df_hoje["pnl_num"].sum()
-            pos_hoje = df_hoje[df_hoje["pnl_num"] > 0].shape[0]
-            neg_hoje = df_hoje[df_hoje["pnl_num"] <= 0].shape[0]
-
-            c1, c2, c3 = st.columns(3)
-            c1.metric("💰 Lucro do Dia", f"${total_hoje:.2f}")
-            c2.metric("📈 Trades Positivos", pos_hoje)
-            c3.metric("📉 Trades Negativos", neg_hoje)
-
-            st.dataframe(df_hoje[["Estratégia", "symbol", "Tipo", "Qtd", "Preço", "Total", "PnL USDT", "PnL %", "Data/Hora"]])
-        else:
-            st.info("Nenhuma operação realizada hoje.")
+        st.subheader("📈 Evolução Diária do Lucro Realizado")
+        df_diario = df_realizadas.groupby("Data")["pnl_num"].sum().cumsum().to_frame(name="Lucro Acumulado")
+        st.line_chart(df_diario)

@@ -27,3 +27,8 @@ def get_balance(asset):
     except Exception as e:
         print(f"[Erro] get_balance({asset}):", e)
         return 0.0, 0.0
+    
+def get_open_orders(symbol=None):
+    if symbol:
+        return client.get_open_orders(symbol=symbol)
+    return client.get_open_orders()
