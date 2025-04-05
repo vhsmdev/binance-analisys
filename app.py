@@ -158,14 +158,19 @@ if all_trades:
         col3.metric("💰 Valor Atual em Ativos", f"${total_em_ativos:.2f}")
         col4.metric("💵 Saldo Atual em USDT", f"${usdt_saldo:.2f}")
 
-        st.subheader("📈 Representatividade por Ativo no Período")
-        df_repr = df_periodo.groupby("symbol")["pnl_num"].sum().to_frame("Lucro")
-        if not df_repr.empty:
-            df_repr["% do Total"] = (df_repr["Lucro"] / total_realizado * 100).round(1)
-            st.dataframe(df_repr, use_container_width=True)
-            st.bar_chart(df_repr["Lucro"])
-        else:
-            st.info("Nenhuma operação no período selecionado.")
+        st.subheader("📆 Resultado Diário (Comparado à Meta)")
+
+        df_diaria = (
+            df_periodo.groupby("Data")["pnl_num"]
+            .sum()
+            .reset_index()
+            .rename(columns={"pnl_num": "Lucro"})
+        )
+        df_diaria["Status"] = df_diaria["Lucro"].apply(lambda x: "📈 Positivo" if x > 0 else "📉 Negativo")
+        df_diaria["Meta Batida"] = df_diaria["Lucro"].apply(lambda x: "✅ Sim" if x >= meta_dia else "❌ Não")
+
+        st.dataframe(df_diaria[["Data", "Lucro", "Status", "Meta Batida"]], use_container_width=True)
+
 
         st.subheader("📦 Ativos em Carteira (Valorização Atual)")
         df_saldos = pd.DataFrame([
