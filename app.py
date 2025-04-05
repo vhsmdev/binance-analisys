@@ -7,7 +7,7 @@ from binance_client import get_trades, get_price, get_balance, get_open_orders
 from storytelling_calculator import processar_trades_completos
 
 st.set_page_config(page_title="Binance PnL Online", layout="wide")
-st_autorefresh(interval=6 * 60 * 1000, key="data_refresh")
+st_autorefresh(interval=1 * 60 * 1000, key="data_refresh")
 
 # ⏰ Controle de dia com base no horário da Binance (UTC)
 if "last_loaded_day" not in st.session_state:
@@ -15,7 +15,6 @@ if "last_loaded_day" not in st.session_state:
 
 if st.session_state["last_loaded_day"] != datetime.now(timezone.utc).date():
     st.session_state.clear()
-    st.experimental_rerun()
 
 st.title("📡 PnL com dados ao vivo da Binance")
 st.caption("Este painel mostra o desempenho detalhado das suas estratégias de trade na Binance, com histórico completo de operações.")
@@ -24,7 +23,7 @@ ativos = {
     "XRPUSDT": "QuickScalp",
     "CAKEUSDT": "QuickScalp",
     "TRXUSDT": "QuickScalp",
-    "BNBUSDT": "Breakx Strategy"
+    "BNBUSDT": "Breakx"
 }
 
 all_trades = []
