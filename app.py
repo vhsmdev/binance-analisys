@@ -91,7 +91,7 @@ try:
 except:
     usdt_saldo = 0.0
 
-meta_dia = 1.00  # 🎯 Meta de lucro diário em USDT
+meta_dia = 0.50  # 🎯 Meta de lucro diário em USDT
 
 # Tabs
 tab1, tab2 = st.tabs(["📊 Análise Geral", "📆 Análise do Dia"])
