@@ -21,9 +21,10 @@ st.title("📡 PnL com dados ao vivo da Binance")
 st.caption("Este painel mostra o desempenho detalhado das suas estratégias de trade na Binance, com histórico completo de operações.")
 
 ativos = {
-    "XRPUSDT": "XRP Main_Strategy",
-    "CAKEUSDT": "CAKE Main_Strategy",
-    "TRXUSDT": "TRX Main_Strategy"
+    "XRPUSDT": "QuickScalp",
+    "CAKEUSDT": "QuickScalp",
+    "TRXUSDT": "QuickScalp",
+    "BNBUSDT": "Breakx Strategy"
 }
 
 all_trades = []
