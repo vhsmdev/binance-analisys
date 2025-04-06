@@ -107,7 +107,7 @@ if all_trades:
         df_hoje = df_realizadas[df_realizadas["Data"] == hoje_utc]
         lucro_hoje = df_hoje["pnl_num"].sum()
         lucro_medio_hoje = df_hoje["pnl_num"].mean() if not df_hoje.empty else 0.0
-        progresso = min(lucro_hoje / meta_dia, 1.0)
+        progresso = min(max(lucro_hoje / meta_dia, 0.0), 1.0)  # <-- Correção aplicada aqui
 
         st.markdown(f"🎯 **Meta diária:** ${meta_dia:.2f}")
 
@@ -133,8 +133,6 @@ if all_trades:
         st.subheader("📘 Histórico de Trades do Dia")
         st.dataframe(df_hoje, use_container_width=True)
 
-
-
     # 📊 ANÁLISE GERAL
     with tab1:
         st.subheader("📅 Filtro de Período")
@@ -143,8 +141,7 @@ if all_trades:
         data_final = col2.date_input("Data Final", value=date.today())
 
         df_periodo = df_realizadas[
-            (df_realizadas["Data"] >= data_inicial) &
-            (df_realizadas["Data"] <= data_final)
+            (df_realizadas["Data"] >= data_inicial) & (df_realizadas["Data"] <= data_final)
         ]
 
         total_realizado = df_periodo["pnl_num"].sum()
@@ -159,7 +156,6 @@ if all_trades:
         col4.metric("💵 Saldo Atual em USDT", f"${usdt_saldo:.2f}")
 
         st.subheader("📆 Resultado Diário (Comparado à Meta)")
-
         df_diaria = (
             df_periodo.groupby("Data")["pnl_num"]
             .sum()
@@ -170,7 +166,6 @@ if all_trades:
         df_diaria["Meta Batida"] = df_diaria["Lucro"].apply(lambda x: "✅ Sim" if x >= meta_dia else "❌ Não")
 
         st.dataframe(df_diaria[["Data", "Lucro", "Status", "Meta Batida"]], use_container_width=True)
-
 
         st.subheader("📦 Ativos em Carteira (Valorização Atual)")
         df_saldos = pd.DataFrame([
