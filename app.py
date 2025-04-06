@@ -23,7 +23,7 @@ ativos = {
     "XRPUSDT": "QuickScalp",
     "CAKEUSDT": "QuickScalp",
     "TRXUSDT": "QuickScalp",
-    "FUNUSDT": "QuickScalp"
+    "FUNUSDT": "BREAKX"
 }
 
 all_trades = []
