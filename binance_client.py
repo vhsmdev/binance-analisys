@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 from binance.client import Client
+from datetime import datetime, timezone, timedelta
 
 load_dotenv()
 
@@ -32,3 +33,46 @@ def get_open_orders(symbol=None):
     if symbol:
         return client.get_open_orders(symbol=symbol)
     return client.get_open_orders()
+def get_opening_price(symbol):
+    try:
+        agora = datetime.utcnow()
+        inicio_utc = agora.replace(hour=0, minute=0, second=0, microsecond=0)
+        start_ts = int(inicio_utc.timestamp() * 1000)
+
+        # Tenta buscar candle de hoje (00:00 UTC)
+        klines = client.get_klines(
+            symbol=symbol,
+            interval=Client.KLINE_INTERVAL_1HOUR,
+            startTime=start_ts,
+            limit=1
+        )
+        if klines:
+            return float(klines[0][1])
+
+        # Fallback: último candle disponível antes das 00:00
+        klines_fallback = client.get_klines(
+            symbol=symbol,
+            interval=Client.KLINE_INTERVAL_1HOUR,
+            limit=1
+        )
+        if klines_fallback:
+            return float(klines_fallback[0][1])
+
+        return None
+    except Exception as e:
+        print(f"[Erro] get_opening_price({symbol}):", e)
+        return None
+
+def get_real_balance(token):
+    """
+    Retorna o saldo total (free + locked) exato do token, igual à interface da Binance.
+    """
+    try:
+        info = client.get_account()
+        for b in info["balances"]:
+            if b["asset"] == token:
+                return float(b["free"]) + float(b["locked"])
+        return 0.0
+    except Exception as e:
+        print(f"[Erro] get_real_balance({token}):", e)
+        return 0.0
