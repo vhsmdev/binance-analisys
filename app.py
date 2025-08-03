@@ -3,7 +3,8 @@ from streamlit_autorefresh import st_autorefresh
 import pandas as pd
 from dotenv import load_dotenv
 from datetime import datetime, date, timezone
-from binance_client import get_trades, get_price, get_balance, get_open_orders, get_opening_price, get_real_balance
+from binance_client import get_trades, get_price, get_balance, get_open_orders, get_real_balance
+from pnl_calculator import calculate_daily_pnl
 from storytelling_calculator import processar_trades_completos
 
 st.set_page_config(page_title="Binance PnL Online", layout="wide")
@@ -144,10 +145,8 @@ if all_trades:
             saldo_token = get_real_balance(token)
             valor_atual = saldo_token * preco_atual
 
-            # Obter preço de abertura (00:00 UTC)
-            preco_abertura = get_opening_price(symbol) or preco_atual
-            valor_inicio_dia = saldo_token * preco_abertura
-            pnl_token_hoje = valor_atual - valor_inicio_dia
+            # PnL diário segundo a regra da Binance
+            _, pnl_token_hoje = calculate_daily_pnl(token, saldo_token, preco_atual)
 
             saldo_estimado_atual += valor_atual
 
