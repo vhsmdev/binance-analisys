@@ -21,10 +21,6 @@ st.caption("Este painel mostra o desempenho detalhado das suas estratégias de t
 
 ativos = {
     "XRPUSDT": "QuickScalp",
-    "CAKEUSDT": "QuickScalp",
-    "TRXUSDT": "QuickScalp",
-    "FUNUSDT": "BREAKX",
-    "EDUUSDT": "BREAKX"
 }
 
 all_trades = []
